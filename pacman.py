@@ -1,326 +1,299 @@
 import random
 import os
 import time
+from collections import deque
 
-ROWS, COLS = 9, 18
-WALL = "#"
-FOOD = "."
-EMPTY = " "
-PACMAN = "P"
-GHOSTS = ["G","g"]
-visited = [ [ False for x in range(COLS)] for x in range(ROWS) ]
-visited[0][0]=True
 
-def initialize_grid():
-    grid = [[FOOD for _ in range(COLS)] for _ in range(ROWS)]
-    grid[0][0] = PACMAN  
+R, C = 9, 18
+W = "#"
+F = "."
+E = " "
+P = "P"
+G = ["G", "g"]
+V = [[False for x in range(C)] for x in range(R)]
+V[0][0] = True
+
+
+def init_grid():
+    grid = [[F for _ in range(C)] for _ in range(R)]
+    grid[0][0] = P  
     
-    for j in range (4,14):
-        grid[4][j]=WALL
+    for j in range(4, 14):
+        grid[4][j] = W
     for j in range(3, 6):
-        grid[j][4] = WALL
-        grid[j][13] = WALL
-    r=0
-    for ghost in GHOSTS:
-        grid[3+r][9] = ghost
-        r+=2
+        grid[j][4] = W
+        grid[j][13] = W
+    r = 0
+    for ghost in G:
+        grid[3 + r][9] = ghost
+        r += 2
     return grid
 
 
-def print_grid(grid):
-    for row in grid:
+def print_g(g):
+    for row in g:
         print(" ".join(row))
     print("\n")
 
 
-from collections import deque
+def calc_dist_to_food(g, r, c):
+    dirs = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
-def calculate_distance_to_food(grid, start_r, start_c):
-   
-    directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+    def is_valid(x, y):
+        return 0 <= x < R and 0 <= y < C and g[x][y] != W
 
-    
-    def is_valid(r, c):
-        return 0 <= r < ROWS and 0 <= c < COLS and grid[r][c] != WALL
+    q = deque([(r, c, 0)])
 
-    # Initialize a queue for BFS and add the starting position
-    queue = deque([(start_r, start_c, 0)])  
-   
-    visited1 = set([(start_r, start_c)])
+    v1 = set([(r, c)])
 
-    while queue:
-        r, c, dist = queue.popleft()
+    while q:
+        x, y, d = q.popleft()
 
-        
-        if grid[r][c] == FOOD:
-            return dist
+        if g[x][y] == F:
+            return d
 
-        
-        for dr, dc in directions:
-            new_r, new_c = r + dr, c + dc
+        for dx, dy in dirs:
+            nx, ny = x + dx, y + dy
 
-            if is_valid(new_r, new_c) and (new_r, new_c) not in visited1:
-                visited1.add((new_r, new_c))
-                queue.append((new_r, new_c, dist + 1))
+            if is_valid(nx, ny) and (nx, ny) not in v1:
+                v1.add((nx, ny))
+                q.append((nx, ny, d + 1))
 
-    
     return float('inf')
 
+# Calculate the distance to ghosts using Breadth-First Search
+def calc_dist_to_ghosts(g, r, c, ghost):
+    dirs = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
-def calculate_distance_to_ghosts(grid, start_r, start_c,g):
-    
-    directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+    def is_valid(x, y):
+        return 0 <= x < R and 0 <= y < C and g[x][y] != W
 
-   
-    def is_valid(r, c):
-        return 0 <= r < ROWS and 0 <= c < COLS and grid[r][c] != WALL
+    q = deque([(r, c, 0)])
 
-    # Initialize a queue for BFS and add the starting position
-    queue = deque([(start_r, start_c, 0)]) 
+    v1 = set([(r, c)])
 
-    
-    visited1 = set([(start_r, start_c)])
+    while q:
+        x, y, d = q.popleft()
 
-    while queue:
-        r, c, dist = queue.popleft()
+        if g[x][y] == ghost:
+            return d
 
-       
-        if grid[r][c]==g:
-            return dist
+        for dx, dy in dirs:
+            nx, ny = x + dx, y + dy
 
-        
-        for dr, dc in directions:
-            new_r, new_c = r + dr, c + dc
+            if is_valid(nx, ny) and (nx, ny) not in v1:
+                v1.add((nx, ny))
+                q.append((nx, ny, d + 1))
 
-            if is_valid(new_r, new_c) and (new_r, new_c) not in visited1:
-                visited1.add((new_r, new_c))
-                queue.append((new_r, new_c, dist + 1))
-
-    
     return float('inf')
 
+# Evaluate the utility of Pac-Man's move
+def u(g, r, c):
+    ghost_p = 0
+    score = 0
+    if g[r][c] == F:
+        score += 9
+    elif g[r][c] == E:
+        score -= 50
+    elif g[r][c] in G:
+        score -= 1000
+    f_d = calc_dist_to_food(g, r, c)
+    f_b = max(30 - f_d, 0)
 
-def utility(grid, r, c):
-    ghost_penalty = 0
-    score=0
-    if grid[r][c]==FOOD:
-        score+=9
-    elif grid[r][c]==EMPTY:
-        score-=50
-    elif grid[r][c] in GHOSTS:
-        score-=1000
-    food_distance = calculate_distance_to_food(grid, r, c)
-    food_bonus =max(30 - food_distance,0) 
+    for ghost in G:
+        d = calc_dist_to_ghosts(g, r, c, ghost)
+        if 0 < d <= 4:
+            ghost_p -= 800 / d
 
-    for ghost in GHOSTS:
-        distance= calculate_distance_to_ghosts(grid, r,c,ghost)
-        if 0 < distance <= 4:
-            ghost_penalty -= 800 / distance
-        
+    return f_b + ghost_p + score
 
-    return food_bonus + ghost_penalty+score
+# Minimax algorithm for Pac-Man's move
+def minimax_move(g, r, c, depth=0, turn=0):
+    v2 = [row[:] for row in V]
 
+    if depth == 1:
+        return u(g, r, c)
+    if turn == 0:  
+        b_s = -float("inf")
+        n_s = 0
+        for n_r, n_c in [(r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)]:
+            if 0 <= n_r < R and 0 <= n_c < C and g[n_r][n_c] != W:
+                t_g = [row[:] for row in g]
+                t_f = t_g[n_r][n_c]
+                t_g[n_r][n_c] = P
+                t_g[r][c] = E
+                v2[n_r][n_c] = True
+                if t_f == F:
+                    n_s += 100
 
-def minimax_move(grid, r, c, depth=0,turn=0):
-    visited2= [row[:] for row in visited]
+                s = minimax_move(t_g, n_r, n_c, depth, 1)
+                s += n_s
 
-    if depth == 1 :
-        return utility(grid, r, c)
-    if turn==0:  
-        best_score = -float("inf")
-        new_score=0
-        for new_r, new_c in [(r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)]:
-            if 0 <= new_r < ROWS and 0 <= new_c < COLS and grid[new_r][new_c] != WALL:
-                temp_grid = [row[:] for row in grid]
-                tmp_food=temp_grid[new_r][new_c]
-                temp_grid[new_r][new_c] = PACMAN
-                temp_grid[r][c]=EMPTY
-                visited2[new_r][new_c]=True
-                if tmp_food==FOOD:
-                    new_score+=100
+                v2[n_r][n_c] = False
+                t_g[n_r][n_c] = t_f
+                t_g[r][c] = P
 
-
-                score = minimax_move(temp_grid, new_r, new_c, depth,1)
-                score+=new_score
-
-                visited2[new_r][new_c]=False
-                
-                temp_grid[new_r][new_c]=tmp_food
-                temp_grid[r][c]=PACMAN
-
-
-                if score > best_score:
-                    best_score = score
-                    best_move = (new_r, new_c)
-        return best_move if depth==0 else best_score
-    elif turn==1:  
-        worst_score = float("inf")
+                if s > b_s:
+                    b_s = s
+                    b_m = (n_r, n_c)
+        return b_m if depth == 0 else b_s
+    elif turn == 1:  
+        w_s = float("inf")
         try:
-            gr, gc = [(i, row.index("G")) for i, row in enumerate(grid) if "G" in row][0]
-            for new_r, new_c in [(gr + 1, gc), (gr - 1, gc), (gr, gc + 1), (gr, gc - 1)]:
-                if 0 <= new_r < ROWS and 0 <= new_c < COLS and grid[new_r][new_c] != WALL:
-                    temp_grid = [row[:] for row in grid]
-                    tmp_food = temp_grid[new_r][new_c]
-                    temp_grid[new_r][new_c] = "G"
-                    if visited2[gr][gc]==False:
-                        temp_grid[gr][gc]=FOOD
+            g_r, g_c = [(i, row.index("G")) for i, row in enumerate(g) if "G" in row][0]
+            for n_r, n_c in [(g_r + 1, g_c), (g_r - 1, g_c), (g_r, g_c + 1), (g_r, g_c - 1)]:
+                if 0 <= n_r < R and 0 <= n_c < C and g[n_r][n_c] != W:
+                    t_g = [row[:] for row in g]
+                    t_f = t_g[n_r][n_c]
+                    t_g[n_r][n_c] = "G"
+                    if not v2[g_r][g_c]:
+                        t_g[g_r][g_c] = F
                     else:
-                        temp_grid[gr][gc] = EMPTY
+                        t_g[g_r][g_c] = E
 
-                    score = minimax_move(temp_grid, r, c, depth, 2)
-                    temp_grid[gr][gc] = "G"
-                    temp_grid[new_r][new_c] = tmp_food
-                    worst_score = min(worst_score, score)
+                    s = minimax_move(t_g, r, c, depth, 2)
+                    t_g[g_r][g_c] = "G"
+                    t_g[n_r][n_c] = t_f
+                    w_s = min(w_s, s)
         except:
-            score = minimax_move(grid, r, c, depth ,2)
-            worst_score = min(worst_score, score)
+            s = minimax_move(g, r, c, depth, 2)
+            w_s = min(w_s, s)
 
-        return worst_score
-    elif turn==2:  
-        worst_score = float("inf")
+        return w_s
+    elif turn == 2:  
+        w_s = float("inf")
         try:
-            gr, gc = [(i, row.index("g")) for i, row in enumerate(grid) if "g" in row][0]
-            for new_r, new_c in [(gr + 1, gc), (gr - 1, gc), (gr, gc + 1), (gr, gc - 1)]:
-                if 0 <= new_r < ROWS and 0 <= new_c < COLS and grid[new_r][new_c] != WALL:
-                    temp_grid = [row[:] for row in grid]
-                    tmp_food = temp_grid[new_r][new_c]
-                    temp_grid[new_r][new_c] = "g"
-                    if visited2[gr][gc]==False:
-                        temp_grid[gr][gc]=FOOD
+            g_r, g_c = [(i, row.index("g")) for i, row in enumerate(g) if "g" in row][0]
+            for n_r, n_c in [(g_r + 1, g_c), (g_r - 1, g_c), (g_r, g_c + 1), (g_r, g_c - 1)]:
+                if 0 <= n_r < R and 0 <= n_c < C and g[n_r][n_c] != W:
+                    t_g = [row[:] for row in g]
+                    t_f = t_g[n_r][n_c]
+                    t_g[n_r][n_c] = "g"
+                    if not v2[g_r][g_c]:
+                        t_g[g_r][g_c] = F
                     else:
-                        temp_grid[gr][gc] = EMPTY
-                    score = minimax_move(temp_grid, r, c, depth+1, 0)
-                    temp_grid[gr][gc] = "g"
-                  
-                    temp_grid[new_r][new_c] = tmp_food
-                    worst_score = min(worst_score, score)
+                        t_g[g_r][g_c] = E
+
+                    s = minimax_move(t_g, r, c, depth + 1, 0)
+                    t_g[g_r][g_c] = "g"
+                    t_g[n_r][n_c] = t_f
+                    w_s = min(w_s, s)
         except:
-            score = minimax_move(grid, r, c, depth+1 ,0)
-            worst_score = min(worst_score, score)
+            s = minimax_move(g, r, c, depth + 1, 0)
+            w_s = min(w_s, s)
 
-        return worst_score
-
-
+        return w_s
 
 # Move ghosts randomly
-def move_ghost(grid, ghost):
-    r, c = [(i, row.index(ghost)) for i, row in enumerate(grid) if ghost in row][0]
-    moves = [(r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)]
-    random.shuffle(moves)
-    for new_r, new_c in moves:
-        if 0 <= new_r < ROWS and 0 <= new_c < COLS and grid[new_r][new_c] != WALL :
-            if (grid[new_r][new_c]!="g" and grid[new_r][new_c]!="G"):
-                if visited[r][c]==True:
-                    grid[r][c] = EMPTY
+def move_ghost(g, ghost):
+    r, c = [(i, row.index(ghost)) for i, row in enumerate(g) if ghost in row][0]
+    m = [(r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)]
+    random.shuffle(m)
+    for n_r, n_c in m:
+        if 0 <= n_r < R and 0 <= n_c < C and g[n_r][n_c] != W:
+            if g[n_r][n_c] not in ["g", "G"]:
+                if V[r][c]:
+                    g[r][c] = E
                 else:
-                    grid[r][c] = FOOD
-                grid[new_r][new_c] = ghost
+                    g[r][c] = F
+                g[n_r][n_c] = ghost
                 break
     return
 
 # Main game loop
 def play_game():
-    grid = initialize_grid()
-    pacman_row, pacman_col = 0, 0
-    score = 0
-    turn=0
+    g = init_grid()
+    p_r, p_c = 0, 0
+    s = 0
+    t = 0
     while True:
-
-        if turn%3==0:
-            new_row, new_col = minimax_move(grid, pacman_row, pacman_col,0)
+        if t % 3 == 0:
+            n_r, n_c = minimax_move(g, p_r, p_c, 0)
             # Update Pac-Man's position and score
-            if (new_row, new_col) != (pacman_row, pacman_col):
-                if grid[new_row][new_col]=="G" or grid[new_row][new_col]=="g":
-                    print(f"Game Over! You lost! Score: {score}")
+            if (n_r, n_c) != (p_r, p_c):
+                if g[n_r][n_c] in ["G", "g"]:
+                    print(f"Game Over! You lost! Score: {s}")
                     break
                 else:
-                    if grid[new_row][new_col]==FOOD:
-                        score += 9
+                    if g[n_r][n_c] == F:
+                        s += 9
                     else:
-                        score-=1
-                    grid[pacman_row][pacman_col] = EMPTY
-                    pacman_row, pacman_col = new_row, new_col
-                    grid[new_row][new_col] = PACMAN
-                    
-                    
-                    visited[new_row][new_col]=True
-                    
+                        s -= 1
+                    g[p_r][p_c] = E
+                    p_r, p_c = n_r, n_c
+                    g[n_r][n_c] = P
+                    V[n_r][n_c] = True
 
+            t += 1
+            print(s)
+            print_g(g)
 
-            turn+=1
-            print(score)
-            print_grid(grid)
+        
+        if t % 3 == 1:
+            move_ghost(g, "G")
+            t += 1
 
-
-        # Move ghosts
-        if turn%3==1:
-            move_ghost(grid,"G")
-
-            turn+=1
-            
-
-        if turn%3==2:
-            move_ghost(grid,"g")
-
-            turn+=1
-            
+        if t % 3 == 2:
+            move_ghost(g, "g")
+            t += 1
 
         time.sleep(0.01)
         os.system("cls")
 
-
-        
-        if grid[pacman_row][pacman_col] in GHOSTS:
-            print(f"Game Over! You lost! Score: {score}")
+        # Check if Pac-Man encounters a ghost
+        if g[p_r][p_c] in G:
+            print(f"Game Over! You lost! Score: {s}")
             break
 
-        
-        if not any(FOOD in row for row in grid):
-            print(f"You win! Score: {score}")
+        # Check if all dots are eaten
+        if not any(F in row for row in g):
+            print(f"You win! Score: {s}")
             break
 
+# Run the game
 play_game()
 
 
+"""### alpha beta
+import secrets
 
-# Minimax algorithm for Pac-Man's move with alpha-beta pruning
-def minimax_move(grid, r, c, depth=0, turn=0, alpha=float('-inf'), beta=float('inf')):
-    visited2 = [row[:] for row in visited]
+def minimax_move(hidden_grid, x, y, depth=0, turn=0, alpha=float('-inf'), beta=float('inf')):
+    secret_visited = [row[:] for row in hidden_grid]
 
     # If the maximum depth is reached or it's a leaf node, return the utility value
     if depth == 2:
-        return utility(grid, r, c)
+      return secret_utility(hidden_grid, x, y)
 
     if turn == 0: 
         best_score = -float("inf")
         new_score = 0
 
-        # Evaluate all possible moves for Pac-Man
-        for new_r, new_c in [(r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)]:
+        # Evaluate all possible moves for Secret-Man
+        for new_x, new_y in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
             # Check if the move is valid
-            if 0 <= new_r < ROWS and 0 <= new_c < COLS and grid[new_r][new_c] != WALL:
-                temp_grid = [row[:] for row in grid]
-                tmp_food = temp_grid[new_r][new_c]
-                temp_grid[r][c] = EMPTY
-                temp_grid[new_r][new_c] = PACMAN
-                visited2[new_r][new_c] = True
+            if 0 <= new_x < SECRET_ROWS and 0 <= new_y < SECRET_COLS and hidden_grid[new_x][new_y] != SECRET_WALL:
+                temp_hidden_grid = [row[:] for row in hidden_grid]
+                temp_food = temp_hidden_grid[new_x][new_y]
+                temp_hidden_grid[x][y] = SECRET_EMPTY
+                temp_hidden_grid[new_x][new_y] = SECRET_MAN
+                secret_visited[new_x][new_y] = True
 
-                # Assign a higher score for collecting food
-                if tmp_food == FOOD:
+                # Assign a higher score for collecting secret food
+                if temp_food == SECRET_FOOD:
                     new_score += 60
 
                 # Recursive call for the next move
-                score = minimax_move(temp_grid, new_r, new_c, depth, 1, alpha, beta)
+                score = minimax_move(temp_hidden_grid, new_x, new_y, depth, 1, alpha, beta)
                 score += new_score
 
-                visited2[new_r][new_c] = False
-                temp_grid[new_r][new_c] = tmp_food
-                temp_grid[r][c] = PACMAN
+                secret_visited[new_x][new_y] = False
+                temp_hidden_grid[new_x][new_y] = temp_food
+                temp_hidden_grid[x][y] = SECRET_MAN
 
                 # Update the best move and score
                 if score > best_score:
                     best_score = score
-                    best_move = (new_r, new_c)
+                    best_move = (new_x, new_y)
 
                 # Perform alpha-beta pruning
                 alpha = max(alpha, best_score)
@@ -334,26 +307,26 @@ def minimax_move(grid, r, c, depth=0, turn=0, alpha=float('-inf'), beta=float('i
 
         try:
             
-            gr, gc = [(i, row.index("G")) for i, row in enumerate(grid) if "G" in row][0]
+            secret_x, secret_y = [(i, row.index(SECRET_GHOST)) for i, row in enumerate(hidden_grid) if SECRET_GHOST in row][0]
 
             
-            for new_r, new_c in [(gr + 1, gc), (gr - 1, gc), (gr, gc + 1), (gr, gc - 1)]:
-                if 0 <= new_r < ROWS and 0 <= new_c < COLS and grid[new_r][new_c] != WALL:
-                    temp_grid = [row[:] for row in grid]
-                    tmp_food = temp_grid[new_r][new_c]
-                    temp_grid[new_r][new_c] = "G"
+            for new_x, new_y in [(secret_x + 1, secret_y), (secret_x - 1, secret_y), (secret_x, secret_y + 1), (secret_x, secret_y - 1)]:
+                if 0 <= new_x < SECRET_ROWS and 0 <= new_y < SECRET_COLS and hidden_grid[new_x][new_y] != SECRET_WALL:
+                    temp_hidden_grid = [row[:] for row in hidden_grid]
+                    temp_food = temp_hidden_grid[new_x][new_y]
+                    temp_hidden_grid[new_x][new_y] = SECRET_GHOST
 
                    
-                    if not visited2[gr][gc]:
-                        temp_grid[gr][gc] = FOOD
+                    if not secret_visited[secret_x][secret_y]:
+                        temp_hidden_grid[secret_x][secret_y] = SECRET_FOOD
                     else:
-                        temp_grid[gr][gc] = EMPTY
+                        temp_hidden_grid[secret_x][secret_y] = SECRET_EMPTY
 
                    
-                    score = minimax_move(temp_grid, r, c, depth, 2, alpha, beta)
+                    score = minimax_move(temp_hidden_grid, x, y, depth, 2, alpha, beta)
 
-                    temp_grid[gr][gc] = "G"
-                    temp_grid[new_r][new_c] = tmp_food
+                    temp_hidden_grid[secret_x][secret_y] = SECRET_GHOST
+                    temp_hidden_grid[new_x][new_y] = temp_food
                     worst_score = min(worst_score, score)
 
                     
@@ -363,7 +336,7 @@ def minimax_move(grid, r, c, depth=0, turn=0, alpha=float('-inf'), beta=float('i
 
         except:
             
-            score = minimax_move(grid, r, c, depth, 2, alpha, beta)
+            score = minimax_move(hidden_grid, x, y, depth, 2, alpha, beta)
             worst_score = min(worst_score, score)
 
         return worst_score
@@ -373,36 +346,37 @@ def minimax_move(grid, r, c, depth=0, turn=0, alpha=float('-inf'), beta=float('i
 
         try:
             
-            gr, gc = [(i, row.index("g")) for i, row in enumerate(grid) if "g" in row][0]
+            secret_x, secret_y = [(i, row.index(SECRET_GHOST_SMALL)) for i, row in enumerate(hidden_grid) if SECRET_GHOST_SMALL in row][0]
 
             
-            for new_r, new_c in [(gr + 1, gc), (gr - 1, gc), (gr, gc + 1), (gr, gc - 1)]:
-                if 0 <= new_r < ROWS and 0 <= new_c < COLS and grid[new_r][new_c] != WALL:
-                    temp_grid = [row[:] for row in grid]
-                    tmp_food = temp_grid[new_r][new_c]
-                    temp_grid[new_r][new_c] = "g"
+            for new_x, new_y in [(secret_x + 1, secret_y), (secret_x - 1, secret_y), (secret_x, secret_y + 1), (secret_x, secret_y - 1)]:
+                if 0 <= new_x < SECRET_ROWS and 0 <= new_y < SECRET_COLS and hidden_grid[new_x][new_y] != SECRET_WALL:
+                    temp_hidden_grid = [row[:] for row in hidden_grid]
+                    temp_food = temp_hidden_grid[new_x][new_y]
+                    temp_hidden_grid[new_x][new_y] = SECRET_GHOST_SMALL
 
                     
-                    if not visited2[gr][gc]:
-                        temp_grid[gr][gc] = FOOD
+                    if not secret_visited[secret_x][secret_y]:
+                        temp_hidden_grid[secret_x][secret_y] = SECRET_FOOD
                     else:
-                        temp_grid[gr][gc] = EMPTY
+                        temp_hidden_grid[secret_x][secret_y] = SECRET_EMPTY
 
                     
-                    score = minimax_move(temp_grid, r, c, depth + 1, 0, alpha, beta)
+                    score = minimax_move(temp_hidden_grid, x, y, depth + 1, 0, alpha, beta)
 
-                    temp_grid[gr][gc] = "g"
-                    temp_grid[new_r][new_c] = tmp_food
+                    temp_hidden_grid[secret_x][secret_y] = SECRET_GHOST_SMALL
+                    temp_hidden_grid[new_x][new_y] = temp_food
                     worst_score = min(worst_score, score)
 
-                   
+                    
                     beta = min(beta, worst_score)
                     if beta <= alpha:
                         break
 
         except:
             
-            score = minimax_move(grid, r, c, depth + 1, 0, alpha, beta)
+            score = minimax_move(hidden_grid, x, y, depth + 1, 0, alpha, beta)
             worst_score = min(worst_score, score)
 
-        return worst_score
+        return worst_score"""
+
