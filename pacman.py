@@ -18,14 +18,14 @@ def init_grid():
     grid = [[F for _ in range(C)] for _ in range(R)]
     grid[0][0] = P  
     
-    for j in range(4, 14):
-        grid[4][j] = W
-    for j in range(3, 6):
-        grid[j][4] = W
-        grid[j][13] = W
+    for j in range(6, 10):
+        grid[3][j] = W
+    for j in range(4, 9):
+        grid[j][15] = W
+        grid[j][3] = W
     r = 0
     for ghost in G:
-        grid[3 + r][9] = ghost
+        grid[2 + r][7] = ghost
         r += 2
     return grid
 
